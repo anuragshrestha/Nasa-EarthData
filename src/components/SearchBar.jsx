@@ -24,7 +24,7 @@ function loadGoogleMaps() {
   return mapsLoader
 }
 
-export default function Header() {
+export default function SearchBar() {
   const inputRef = useRef(null)
   const [query, setQuery] = useState('')
 

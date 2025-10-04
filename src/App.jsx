@@ -1,7 +1,7 @@
 import React from 'react'
 import './styles/ui.css'
 
-import Header from './components/Header.jsx'
+import SearchBar from './components/SearchBar.jsx'
 import TitleBar from './components/TitleBar.jsx'
 import MobileTabs from './components/MobileTabs.jsx'
 
@@ -17,7 +17,7 @@ function App() {
       <MobileTabs />
       <div className="container">
         <TitleBar />
-        <Header />
+        <SearchBar />
         <div className="dashboard-grid">
           <div className="stack">
             <AirQualityAlerts />
