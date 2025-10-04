@@ -39,7 +39,8 @@ html{ scroll-behavior:smooth; }
   padding-top: 8px;
   text-align: center;
 }
-.titlebar .brand-mark{ margin: 0 auto 8px; }
+
+.titlebar .brand-logo{ margin: 0 auto 8px; width: 44px; height: 44px; object-fit: contain; display:block; filter: drop-shadow(0 2px 8px rgba(96,165,250,.6)); }
 .titlebar .title{ font-size: 26px; font-weight: 800; }
 .titlebar .subtitle{ font-size: 14px; color: var(--muted); }
 
