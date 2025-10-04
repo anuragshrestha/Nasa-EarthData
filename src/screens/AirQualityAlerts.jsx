@@ -13,7 +13,7 @@ export default function AirQualityAlerts() {
         </div>
         <div className="field" style={{display:'grid', gap:8, marginBottom:10}}>
           <label className="muted" htmlFor="threshold">Alert when AQI exceeds:</label>
-          <input id="threshold" className="input" defaultValue="100" />
+          <input id="threshold" className="input" placeholder='Enter the Air quality index' />
         </div>
         <button className="btn">
           <svg

@@ -6,7 +6,6 @@ import TitleBar from './components/TitleBar.jsx'
 import MobileTabs from './components/MobileTabs.jsx'
 
 import Home from './screens/Home.jsx'
-import AirQualityIndex from './screens/AirQualityIndex.jsx'
 import AirQualityAlerts from './screens/AirQualityAlerts.jsx'
 import CityRankings from './screens/CityRankings.jsx'
 import WildfireUpdates from './screens/WildfireUpdates.jsx'
