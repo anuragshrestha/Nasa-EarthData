@@ -11,7 +11,7 @@ export default function Home() {
             alt="Satellite view placeholder"
             src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1600&auto=format&fit=crop"
           />
-          <div className="map-caption">Real-time satellite view — NASA TEMPO (placeholder)</div>
+          <div className="map-caption">Real-time satellite view — NASA TEMPO</div>
         </div>
       </div>
     </section>
