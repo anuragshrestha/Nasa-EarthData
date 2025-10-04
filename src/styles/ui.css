@@ -11,11 +11,10 @@
 }
 
 html, body, #root, .app-root {
-  height: 100%;
-  background:
-    radial-gradient(1100px 620px at 50% -10%, rgba(59,130,246,0.55) 0%, rgba(59,130,246,0.08) 55%, rgba(0,0,0,0) 70%),
-    radial-gradient(900px 600px at 90% 95%, rgba(16,185,129,0.28) 0%, rgba(0,0,0,0) 60%),
-    linear-gradient(180deg, #0a1630 0%, #0d2337 100%);
+  min-height: 100vh;
+  width: 100%;
+  margin: 0; 
+  background: #03235a;
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji';
 }
