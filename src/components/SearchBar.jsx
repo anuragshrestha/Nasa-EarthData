@@ -19,33 +19,34 @@ export default function SearchBar({ onSearchLocation }) {
       alert("Please select a location first!");
       return;
     }
-
+    setLoading(true);
     const { lat, lng } = location;
 
     onSearchLocation?.({ lat, lng });
+    setTimeout(() => setLoading(false), 1000);
 
-    try {
-      setLoading(true);
+    // try {
+    //   setLoading(true);
 
-      const comps = encodeURIComponent(JSON.stringify(location.components));
-      const res = await fetch(
-        `${API_URL}/api/openaq/latest?lat=${lat}&lon=${lng}&components=${comps}`
-      );
+    //   const comps = encodeURIComponent(JSON.stringify(location.components));
+    //   const res = await fetch(
+    //     `${API_URL}/api/openaq/latest?lat=${lat}&lon=${lng}&components=${comps}`
+    //   );
 
-      if (!res.ok) {
-        const error = await res.text();
-        throw new Error(error || "Failed to fetch OpenAQ data");
-      }
+    //   if (!res.ok) {
+    //     const error = await res.text();
+    //     throw new Error(error || "Failed to fetch OpenAQ data");
+    //   }
 
-      const data = await res.json();
-      console.log("OpenAQ latest data:", data);
-      setToast({ type: "success", text: "Navigating to the location..." });
-      setTimeout(() => setToast(null), 5000);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+    //   const data = await res.json();
+    //   console.log("OpenAQ latest data:", data);
+    //   setToast({ type: "success", text: "Navigating to the location..." });
+    //   setTimeout(() => setToast(null), 5000);
+    // } catch (error) {
+    //   console.error(error);
+    // } finally {
+    //   setLoading(false);
+    // }
 
     
     console.log("Selected location:", location);
