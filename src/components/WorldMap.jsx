@@ -1,38 +1,55 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { loadGoogleMaps } from '../utils/loadGoogleMaps'
 
-/**
- * Props:
- *   center: { lat: number, lng: number } | null
- *   zoomOnSelect?: number (default 11)
- */
 export default function WorldMap({ center, zoomOnSelect = 11 }) {
   const mapElRef = useRef(null)
   const mapRef = useRef(null)
   const markerRef = useRef(null)
-  const heatmapRef = useRef(null)
   const [ready, setReady] = useState(false)
   const abortRef = useRef(null)
-    const circleRef = useRef(null);
+
+  const overlaysRef = useRef([])
+
+  const USA_CENTROID = { lat: 39.8283, lng: -98.5795 }
+  const NA_BOUNDS_COORDS = {
+
+    sw: { lat: 5,  lng: -168 },
+    ne: { lat: 83, lng:  -52 }
+  }
 
   useEffect(() => {
     let cancelled = false
-    loadGoogleMaps().then(() => {
-      if (cancelled || !mapElRef.current || !window.google?.maps) return
-      mapRef.current = new google.maps.Map(mapElRef.current, {
-        center: { lat: 20, lng: 0 },
-        zoom: 2,
-        mapTypeId: 'hybrid',
-        disableDefaultUI: true,
-        gestureHandling: 'greedy',
-        backgroundColor: '#00132b'
+    loadGoogleMaps()
+      .then(() => {
+        if (cancelled || !mapElRef.current || !window.google?.maps) return
+
+        mapRef.current = new google.maps.Map(mapElRef.current, {
+          mapTypeId: 'hybrid',
+          disableDefaultUI: true,
+          gestureHandling: 'greedy',
+          backgroundColor: '#00132b'
+        })
+
+        // Default: show the whole North America
+        if (!center) {
+          const b = new google.maps.LatLngBounds(
+            new google.maps.LatLng(NA_BOUNDS_COORDS.sw.lat, NA_BOUNDS_COORDS.sw.lng),
+            new google.maps.LatLng(NA_BOUNDS_COORDS.ne.lat, NA_BOUNDS_COORDS.ne.lng)
+          )
+          mapRef.current.fitBounds(b)
+          fetchAndDrawNearby(USA_CENTROID)
+        } else {
+          mapRef.current.setCenter(center)
+          mapRef.current.setZoom(zoomOnSelect)
+        }
+
+        setReady(true)
       })
-      setReady(true)
-    }).catch(err => console.error('Maps JS failed to load:', err))
+      .catch(err => console.error('Maps JS failed to load:', err))
     return () => { cancelled = true }
   }, [])
 
-  // Update marker + pan when center changes
+  // Update marker + regional AQI dots when a user picks a location
   useEffect(() => {
     if (!ready || !center || !mapRef.current) return
 
@@ -59,11 +76,8 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
     mapRef.current.panTo(pos)
     setTimeout(() => mapRef.current.setZoom(zoomOnSelect), 150)
 
-    // refresh AQI heat layer near the selected point
-    refreshAQIHeat({ lat, lng })
+    fetchAndDrawNearby({ lat, lng })
   }, [center, ready, zoomOnSelect])
-
-
 
   function apiBase() {
     return import.meta.env.MODE === 'development'
@@ -71,48 +85,68 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
       : import.meta.env.VITE_API_URL
   }
 
-
-async function refreshAQIHeat(pt) {
-  try {
-    if (!pt) return;
-    if (abortRef.current) abortRef.current.abort();
-    const ctl = new AbortController();
-    abortRef.current = ctl;
-
-    const url = `${apiBase()}/api/airnow/aqi?lat=${encodeURIComponent(pt.lat)}&lon=${encodeURIComponent(pt.lng)}&radius=250`;
-    const res = await fetch(url, { signal: ctl.signal });
-    if (!res.ok) {
-      if (heatmapRef.current) heatmapRef.current.setMap(null);
-      if (circleRef.current) circleRef.current.setMap(null);
-      return;
-    }
-    const data = await res.json();
-
-    // Colored circle at the selected point
-    const pos = new google.maps.LatLng(pt.lat, pt.lng);
-    if (circleRef.current) circleRef.current.setMap(null);
-    circleRef.current = new google.maps.Circle({
-      map: mapRef.current,
-      center: pos,
-      radius: 1600,               
-      strokeOpacity: 0,
-      fillColor: data.color || "#777",
-      fillOpacity: 0.35,
-    });
-
-    if (markerRef.current) {
-      markerRef.current.setLabel({
-        text: String(data.overallAQI ?? ""),
-        className: "aqi-badge", 
-      });
-      markerRef.current.setTitle(`AQI ${data.overallAQI} (${data.category})`);
-    }
-  } catch (e) {
-    console.warn("AQI overlay failed", e);
-    if (heatmapRef.current) heatmapRef.current.setMap(null);
-    if (circleRef.current) circleRef.current.setMap(null);
+  function clearOverlays() {
+    for (const o of overlaysRef.current) o.setMap && o.setMap(null)
+    overlaysRef.current = []
   }
-}
+
+  async function fetchAndDrawNearby(pt) {
+    try {
+      if (abortRef.current) abortRef.current.abort()
+      const ctl = new AbortController()
+      abortRef.current = ctl
+
+      // wider regional coverage (≈ New Mexico/state-sized default); tune as you like
+      const url =
+        `${apiBase()}/api/airnow/nearby?` +
+        `lat=${encodeURIComponent(pt.lat)}&lon=${encodeURIComponent(pt.lng)}` +
+        `&radius=100&spread=150&limit=25`
+
+      const res = await fetch(url, { signal: ctl.signal })
+      if (!res.ok) {
+        clearOverlays()
+        return
+      }
+      const data = await res.json()
+      const locs = Array.isArray(data?.locations) ? data.locations : []
+      clearOverlays()
+
+      // draw small colored circles + AQI labels at each reporting area
+      for (const loc of locs) {
+        const circle = new google.maps.Circle({
+          map: mapRef.current,
+          center: new google.maps.LatLng(loc.lat, loc.lon),
+          radius: 8000,         
+          strokeOpacity: 0,
+          fillColor: loc.color || '#777',
+          fillOpacity: 0.35,
+        })
+        overlaysRef.current.push(circle)
+
+        const labelMarker = new google.maps.Marker({
+          position: { lat: loc.lat, lng: loc.lon },
+          map: mapRef.current,
+          title: `${loc.reportingArea}, ${loc.state} — AQI ${loc.aqi} (${loc.category})`,
+          label: { text: String(loc.aqi ?? ''), className: 'aqi-badge' }
+        })
+        overlaysRef.current.push(labelMarker)
+      }
+
+      // if we have a selected location and at least one station, label the main marker too
+      if (markerRef.current && locs[0]) {
+        markerRef.current.setLabel({
+          text: String(locs[0].aqi ?? ''),
+          className: 'aqi-badge',
+        })
+        markerRef.current.setTitle(
+          `${locs[0].reportingArea}, ${locs[0].state} — AQI ${locs[0].aqi} (${locs[0].category})`
+        )
+      }
+    } catch (e) {
+      console.warn('AQI nearby fetch failed', e)
+      clearOverlays()
+    }
+  }
 
   return (
     <div className="map-inner">
