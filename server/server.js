@@ -5,6 +5,7 @@ import alertRoute from './routes/alertRoute.js';
 import airnowRoute from './routes/airnowRoute.js';
 import airnowNearbyRoute from './routes/airnowNearbyRoute.js';
 import wildfirRoute from './routes/wildfireRoute.js';
+import airnowUSRankingsRoute from './routes/airnowUSRankingsRoute.js';
 
 
 dotenv.config();
@@ -17,6 +18,7 @@ app.use("/alerts", alertRoute);
 app.use("/", airnowRoute);
 app.use('/', airnowNearbyRoute);
 app.use('/', wildfirRoute);
+app.use('/', airnowUSRankingsRoute);
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
