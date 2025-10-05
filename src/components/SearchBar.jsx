@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import AutocompleteAddress from "./AutoCompleteAddress";
 
-export default function SearchBar() {
+export default function SearchBar({ onSearchLocation }) {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -21,14 +21,16 @@ export default function SearchBar() {
     }
 
     const { lat, lng } = location;
-    console.log("location: ", location);
-    
+
+    onSearchLocation?.({ lat, lng });
 
     try {
       setLoading(true);
 
-   const comps = encodeURIComponent(JSON.stringify(location.components));
-const res = await fetch(`${API_URL}/api/openaq/latest?lat=${lat}&lon=${lng}&components=${comps}`);
+      const comps = encodeURIComponent(JSON.stringify(location.components));
+      const res = await fetch(
+        `${API_URL}/api/openaq/latest?lat=${lat}&lon=${lng}&components=${comps}`
+      );
 
       if (!res.ok) {
         const error = await res.text();
@@ -45,7 +47,7 @@ const res = await fetch(`${API_URL}/api/openaq/latest?lat=${lat}&lon=${lng}&comp
       setLoading(false);
     }
 
-    // This is where you handle the location data
+    
     console.log("Selected location:", location);
 
     console.log(lat, " ", lng);
