@@ -1,53 +1,66 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { loadGoogleMaps } from '../utils/loadGoogleMaps'
 
-
-/**
- * Props:
- *   center: { lat: number, lng: number } | null
- *   zoomOnSelect?: number (default 11)
- */
 export default function WorldMap({ center, zoomOnSelect = 11 }) {
   const mapElRef = useRef(null)
   const mapRef = useRef(null)
   const markerRef = useRef(null)
-  const heatmapRef = useRef(null)
   const [ready, setReady] = useState(false)
   const abortRef = useRef(null)
 
-  
+  const overlaysRef = useRef([])
+
+  const USA_CENTROID = { lat: 39.8283, lng: -98.5795 }
+  const NA_BOUNDS_COORDS = {
+
+    sw: { lat: 5,  lng: -168 },
+    ne: { lat: 83, lng:  -52 }
+  }
+
   useEffect(() => {
     let cancelled = false
-    loadGoogleMaps().then(() => {
-      if (cancelled || !mapElRef.current || !window.google?.maps) return
-      mapRef.current = new google.maps.Map(mapElRef.current, {
-        center: { lat: 20, lng: 0 },     
-        zoom: 2,
-        mapTypeId: 'hybrid',            
-        disableDefaultUI: true,
-        gestureHandling: 'greedy',      
-        backgroundColor: '#00132b'
-      })
-      setReady(true)
-    })
-    .catch(err => console.error('Maps JS failed to load:', err));
+    loadGoogleMaps()
+      .then(() => {
+        if (cancelled || !mapElRef.current || !window.google?.maps) return
 
+        mapRef.current = new google.maps.Map(mapElRef.current, {
+          mapTypeId: 'hybrid',
+          disableDefaultUI: true,
+          gestureHandling: 'greedy',
+          backgroundColor: '#00132b'
+        })
+
+        // Default: show the whole North America
+        if (!center) {
+          const b = new google.maps.LatLngBounds(
+            new google.maps.LatLng(NA_BOUNDS_COORDS.sw.lat, NA_BOUNDS_COORDS.sw.lng),
+            new google.maps.LatLng(NA_BOUNDS_COORDS.ne.lat, NA_BOUNDS_COORDS.ne.lng)
+          )
+          mapRef.current.fitBounds(b)
+          fetchAndDrawNearby(USA_CENTROID)
+        } else {
+          mapRef.current.setCenter(center)
+          mapRef.current.setZoom(zoomOnSelect)
+        }
+
+        setReady(true)
+      })
+      .catch(err => console.error('Maps JS failed to load:', err))
     return () => { cancelled = true }
   }, [])
 
-  // Update marker + pan when center changes
+  // Update marker + regional AQI dots when a user picks a location
   useEffect(() => {
     if (!ready || !center || !mapRef.current) return
 
-    const lat = parseFloat(center.lat);
-    const lng = parseFloat(center.lng);
-    if(!Number.isFinite(lat) || !Number.isFinite(lng)){
-        console.warn('WorldMap: invalid center', center);
-        return
+    const lat = parseFloat(center.lat)
+    const lng = parseFloat(center.lng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      console.warn('WorldMap: invalid center', center)
+      return
     }
 
-    // Create/update the marker (use default Google red pin)
-    const pos = new google.maps.LatLng(lat, lng);
+    const pos = new google.maps.LatLng(lat, lng)
     if (!markerRef.current) {
       markerRef.current = new google.maps.Marker({
         position: pos,
@@ -57,48 +70,14 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
       })
     } else {
       markerRef.current.setPosition(pos)
-      if (markerRef.current.getIcon()) {
-        markerRef.current.setIcon(null)
-      }
+      if (markerRef.current.getIcon()) markerRef.current.setIcon(null)
     }
 
     mapRef.current.panTo(pos)
-
     setTimeout(() => mapRef.current.setZoom(zoomOnSelect), 150)
 
-    // refresh AQI heat layer near the selected point
-    refreshAQIHeat(center)
+    fetchAndDrawNearby({ lat, lng })
   }, [center, ready, zoomOnSelect])
-
-  // Convert PM2.5 ug/m3 to US EPA AQI (approximate 24h formula)
-  function pm25ToAQI(c) {
-    const ranges = [
-      { Cl: 0.0,   Ch: 12.0,   Il: 0,   Ih: 50 },
-      { Cl: 12.1,  Ch: 35.4,   Il: 51,  Ih: 100 },
-      { Cl: 35.5,  Ch: 55.4,   Il: 101, Ih: 150 },
-      { Cl: 55.5,  Ch: 150.4,  Il: 151, Ih: 200 },
-      { Cl: 150.5, Ch: 250.4,  Il: 201, Ih: 300 },
-      { Cl: 250.5, Ch: 500.4,  Il: 301, Ih: 500 },
-    ]
-    for (const r of ranges) {
-      if (c >= r.Cl && c <= r.Ch) {
-        return Math.round(((r.Ih - r.Il) / (r.Ch - r.Cl)) * (c - r.Cl) + r.Il)
-      }
-    }
-    return 500
-  }
-
-  function aqiGradient() {
-    return [
-      'rgba(0,0,0,0)',
-      '#00e400', // Good
-      '#ffff00', // Moderate
-      '#ff7e00', // USG
-      '#ff0000', // Unhealthy
-      '#8f3f97', // Very Unhealthy
-      '#7e0023', // Hazardous
-    ]
-  }
 
   function apiBase() {
     return import.meta.env.MODE === 'development'
@@ -106,71 +85,66 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
       : import.meta.env.VITE_API_URL
   }
 
-  async function refreshAQIHeat(pt) {
+  function clearOverlays() {
+    for (const o of overlaysRef.current) o.setMap && o.setMap(null)
+    overlaysRef.current = []
+  }
+
+  async function fetchAndDrawNearby(pt) {
     try {
-      if (!pt) return
       if (abortRef.current) abortRef.current.abort()
       const ctl = new AbortController()
       abortRef.current = ctl
 
-      const url = `${apiBase()}/api/openaq/latest?lat=${encodeURIComponent(pt.lat)}&lon=${encodeURIComponent(pt.lng)}`
+      // wider regional coverage (≈ New Mexico/state-sized default); tune as you like
+      const url =
+        `${apiBase()}/api/airnow/nearby?` +
+        `lat=${encodeURIComponent(pt.lat)}&lon=${encodeURIComponent(pt.lng)}` +
+        `&radius=100&spread=150&limit=25`
+
       const res = await fetch(url, { signal: ctl.signal })
       if (!res.ok) {
-        console.log('failed to load the openap url');
-        
-        if (heatmapRef.current) heatmapRef.current.setMap(null)
+        clearOverlays()
         return
       }
       const data = await res.json()
-      const results = Array.isArray(data?.results) ? data.results : []
+      const locs = Array.isArray(data?.locations) ? data.locations : []
+      clearOverlays()
 
-      // Collect PM2.5 points
-      const points = []
-      const pushPoint = (lat, lng, pm25) => {
-        if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(pm25)) return
-        const aqi = pm25ToAQI(pm25)
-        const weight = Math.min(1, aqi / 300)
-        points.push({ location: new google.maps.LatLng(lat, lng), weight })
-      }
-
-      for (const r of results) {
-        // v3 latest often: { measurements: [{parameter, value}], coordinates: {latitude, longitude} }
-        const lat = r?.coordinates?.latitude ?? r?.location?.coordinates?.latitude ?? r?.latitude ?? r?.location?.latitude
-        const lng = r?.coordinates?.longitude ?? r?.location?.coordinates?.longitude ?? r?.longitude ?? r?.location?.longitude
-        let pm25 = null
-        if (Array.isArray(r?.measurements)) {
-          const m = r.measurements.find(m => (m?.parameter || m?.parameterId || '').toString().toLowerCase() === 'pm25' || m?.parameter === 'pm2.5')
-          pm25 = m?.value ?? null
-        } else if ((r?.parameter || '').toString().toLowerCase() === 'pm25' || r?.parameter === 'pm2.5') {
-          pm25 = r?.value ?? null
-        }
-        if (lat != null && lng != null && pm25 != null) pushPoint(Number(lat), Number(lng), Number(pm25))
-      }
-
-      if (!points.length) {
-        if (heatmapRef.current) heatmapRef.current.setMap(null)
-        return
-      }
-
-      if (!heatmapRef.current) {
-        heatmapRef.current = new google.maps.visualization.HeatmapLayer({
-          data: points,
+      // draw small colored circles + AQI labels at each reporting area
+      for (const loc of locs) {
+        const circle = new google.maps.Circle({
           map: mapRef.current,
-          radius: 32,
-          opacity: 0.6,
-          gradient: aqiGradient(),
+          center: new google.maps.LatLng(loc.lat, loc.lon),
+          radius: 8000,         
+          strokeOpacity: 0,
+          fillColor: loc.color || '#777',
+          fillOpacity: 0.35,
         })
-      } else {
-        heatmapRef.current.setData(points)
-        heatmapRef.current.set('gradient', aqiGradient())
-        heatmapRef.current.set('radius', 32)
-        heatmapRef.current.set('opacity', 0.6)
-        heatmapRef.current.setMap(mapRef.current)
+        overlaysRef.current.push(circle)
+
+        const labelMarker = new google.maps.Marker({
+          position: { lat: loc.lat, lng: loc.lon },
+          map: mapRef.current,
+          title: `${loc.reportingArea}, ${loc.state} — AQI ${loc.aqi} (${loc.category})`,
+          label: { text: String(loc.aqi ?? ''), className: 'aqi-badge' }
+        })
+        overlaysRef.current.push(labelMarker)
+      }
+
+      // if we have a selected location and at least one station, label the main marker too
+      if (markerRef.current && locs[0]) {
+        markerRef.current.setLabel({
+          text: String(locs[0].aqi ?? ''),
+          className: 'aqi-badge',
+        })
+        markerRef.current.setTitle(
+          `${locs[0].reportingArea}, ${locs[0].state} — AQI ${locs[0].aqi} (${locs[0].category})`
+        )
       }
     } catch (e) {
-      // Swallow errors to avoid disrupting the UI
-      console.warn('AQI heat refresh failed', e)
-      if (heatmapRef.current) heatmapRef.current.setMap(null)
+      console.warn('AQI nearby fetch failed', e)
+      clearOverlays()
     }
   }
 

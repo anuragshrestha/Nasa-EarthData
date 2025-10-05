@@ -7,10 +7,6 @@ export default function SearchBar({ onSearchLocation }) {
   const [toast, setToast] = useState(null);
   const [address, setAddress] = useState("");
 
-  const API_URL =
-    import.meta.env.MODE === "development"
-      ? "http://localhost:4000"
-      : import.meta.env.VITE_API_URL;
 
   const onPressSearch = async () => {
     console.log("pressed search");
@@ -23,30 +19,9 @@ export default function SearchBar({ onSearchLocation }) {
     const { lat, lng } = location;
 
     onSearchLocation?.({ lat, lng });
+    setToast({ type: "success", text: "Navigating to the location..." });
+    setTimeout(() => setToast(null), 3000);
     setTimeout(() => setLoading(false), 1000);
-
-    // try {
-    //   setLoading(true);
-
-    //   const comps = encodeURIComponent(JSON.stringify(location.components));
-    //   const res = await fetch(
-    //     `${API_URL}/api/openaq/latest?lat=${lat}&lon=${lng}&components=${comps}`
-    //   );
-
-    //   if (!res.ok) {
-    //     const error = await res.text();
-    //     throw new Error(error || "Failed to fetch OpenAQ data");
-    //   }
-
-    //   const data = await res.json();
-    //   console.log("OpenAQ latest data:", data);
-    //   setToast({ type: "success", text: "Navigating to the location..." });
-    //   setTimeout(() => setToast(null), 5000);
-    // } catch (error) {
-    //   console.error(error);
-    // } finally {
-    //   setLoading(false);
-    // }
 
     
     console.log("Selected location:", location);
