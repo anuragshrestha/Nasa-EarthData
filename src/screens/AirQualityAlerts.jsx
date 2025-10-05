@@ -14,7 +14,7 @@ const handleAlert = async () => {
     return;
   }
   try {
-    const res = await fetch('http://localhost:5174/alerts', {
+    const res = await fetch('http://localhost:4000/alerts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -72,11 +72,6 @@ const handleAlert = async () => {
             onPlaceSelected={setLocation}
             countryRestriction="us"
           />
-          {location && (
-            <span className="badge" title={location.placeId}>
-              {location.label}
-            </span>
-          )}
         </div>
 
         {/** Air quality index */}

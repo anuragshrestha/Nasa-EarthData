@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "24": "^0.0.0",
     "@googlemaps/js-api-loader": "^2.0.1",
+    "node": "^24.9.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
