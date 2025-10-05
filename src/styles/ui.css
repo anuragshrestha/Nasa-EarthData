@@ -429,38 +429,43 @@ section {
   display: block;
 }
 
-@media (max-width: 1280px) { 
-
-.titlebar,
+@media (max-width: 1280px) {
+  /* Use symmetric side gutters without overflowing 100% width */
+  .titlebar,
   .hero,
   .dashboard-grid {
-    width: 95%;
+    width: auto;
     max-width: none;
-    margin-inline: 5%;
+    margin-left: 5%;
+    margin-right: 5%;
   }
-  
-
-
- }
+}
 
 @media (max-width: 720px) {
   .titlebar,
   .hero,
   .dashboard-grid {
-    width: 95%;
+    width: auto;
     max-width: none;
-    margin-inline: 5%;
+    margin-left: 5%;
+    margin-right: 5%;
   }
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
   .mobile-tabs {
     position: fixed;
-    top: 10px;
-    right: 10px;
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
+    transform: translateX(-50%);
     z-index: 50;
     display: flex;
     gap: 8px;
+    justify-content: center;
+    max-width: min(680px, 92%);
+    width: fit-content;
     background: rgba(5, 10, 25, 0.6);
     border: 1px solid var(--border);
     backdrop-filter: blur(8px);
@@ -484,6 +489,10 @@ section {
   .map-inner {
     height: 360px;
   }
+  /* Keep space so bottom nav doesn't overlap content */
+  .app-root {
+    padding-bottom: 76px;
+  }
   .aqi-wrap {
     grid-template-columns: 1fr;
   }
@@ -492,10 +501,12 @@ section {
   }
   .home-mobile {
     display: block;
-    margin: 20px 5%;
-    width: 95%;
+    margin-left: 5%;
+    margin-right: 5%;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    width: auto;
     max-width: none;
-    margin-inline: 5%;
   }
   .home-desktop {
     display: none;
