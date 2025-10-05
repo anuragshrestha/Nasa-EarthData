@@ -6,15 +6,17 @@ export default function AirQualityAlerts() {
   const [threshold, setThreshold] = useState("");
   const [location, setLocation] = useState(null);
 
+const API_URL = import.meta.env.MODE === 'development' ? 'http://localhost:4000' :  import.meta.env.VITE_API_URL;
+ 
 
-  //calls api to store the alert data
+//calls api to store the alert data
 const handleAlert = async () => {
   if (!email || !threshold || !location) {
     alert('Please fill email, location and AQI threshold');
     return;
   }
   try {
-    const res = await fetch('http://localhost:4000/alerts', {
+    const res = await fetch(`${API_URL}/alerts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
