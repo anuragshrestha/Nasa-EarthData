@@ -6,6 +6,8 @@ import openaqRoute from './routes/openaqRoute.js';
 import weatherRoute from './routes/weatherRoute.js';
 import ninjasAirRoute from './routes/ninjasAirRoute.js';
 import tempoRoute from './routes/tempoRoute.js';
+import aqicnRoute from './routes/aqicnRoute.js';
+import newsRoute from './routes/newsRoute.js';
 
 dotenv.config();
 // Fallback to a non-dot env file if .env isn't available
@@ -22,6 +24,8 @@ app.use("/", openaqRoute);
 app.use("/", weatherRoute);
 app.use("/", ninjasAirRoute);
 app.use("/", tempoRoute);
+app.use("/", aqicnRoute);
+app.use("/", newsRoute);
 
 // Simple health/help route
 app.get("/", (_req, res) => {

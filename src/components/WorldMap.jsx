@@ -36,9 +36,12 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
   const [ready, setReady] = useState(false)
   const abortRef = useRef(null)
   const wildfireFetchAbortRef = useRef(null)
+  const newsMarkersRef = useRef([])
+  const newsPointsRef = useRef([])
   const [showWildfires, setShowWildfires] = useState(true)
   const [fireMarkers, setFireMarkers] = useState([])
   const [firePolys, setFirePolys] = useState([])
+  const [mapError, setMapError] = useState(null)
 
   
   useEffect(() => {
@@ -53,11 +56,41 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
         gestureHandling: 'greedy',      
         backgroundColor: '#00132b'
       })
+      setMapError(null)
       setReady(true)
     })
-    .catch(err => console.error('Maps JS failed to load:', err));
+    .catch(err => {
+      console.error('Maps JS failed to load:', err)
+      if (!cancelled) {
+        setMapError(err?.message || 'Google Maps failed to load. Check your API key configuration.')
+      }
+    });
 
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const previousHandler = window.gm_authFailure
+    const handler = () => {
+      setMapError('Google Maps rejected the API key. Ensure billing is enabled and referrer restrictions include this origin.')
+      if (typeof previousHandler === 'function') {
+        try {
+          previousHandler()
+        } catch (error) {
+          console.warn('Previous gm_authFailure handler threw an error', error)
+        }
+      }
+    }
+    window.gm_authFailure = handler
+    return () => {
+      if (window.gm_authFailure === handler) {
+        if (typeof previousHandler === 'function') {
+          window.gm_authFailure = previousHandler
+        } else {
+          delete window.gm_authFailure
+        }
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -84,18 +117,29 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
   }, [ready, showWildfires])
 
   useEffect(() => {
+    if (ready && showWildfires && newsPointsRef.current.length) {
+      renderNewsMarkers(newsPointsRef.current)
+    }
+  }, [ready])
+
+  useEffect(() => {
     if (wildfireCtrlRef.current) {
       wildfireCtrlRef.current.innerHTML = `🔥 Wildfires: <b>${showWildfires ? 'ON' : 'OFF'}</b>`
     }
 
     if (!showWildfires) {
       clearWildfires({ setFireMarkers, setFirePolys })
+      newsMarkersRef.current.forEach(marker => marker.setMap?.(null))
+      newsMarkersRef.current = []
       if (wildfireFetchAbortRef.current) wildfireFetchAbortRef.current.abort()
       return
     }
 
     if (mapRef.current && ready) {
       refreshWildfires(mapRef.current, setFireMarkers, setFirePolys, wildfireFetchAbortRef)
+      if (newsPointsRef.current.length) {
+        renderNewsMarkers(newsPointsRef.current)
+      }
     }
   }, [showWildfires, ready])
 
@@ -114,8 +158,24 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
         }
       }
       wildfireCtrlRef.current = null
+      newsMarkersRef.current.forEach(marker => marker.setMap?.(null))
+      newsMarkersRef.current = []
     }
   }, [])
+
+  useEffect(() => {
+    const handler = (event) => {
+      const detail = Array.isArray(event.detail) ? event.detail : []
+      newsPointsRef.current = detail
+      if (ready && showWildfires) {
+        renderNewsMarkers(detail)
+      }
+    }
+    window.addEventListener('wildfire-news-coords', handler)
+    return () => {
+      window.removeEventListener('wildfire-news-coords', handler)
+    }
+  }, [ready, showWildfires])
 
   // Update marker + pan when center changes
   useEffect(() => {
@@ -283,6 +343,43 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
     })
   }
 
+  function renderNewsMarkers(points) {
+    if (!mapRef.current || !window.google?.maps) return
+    const g = window.google.maps
+    newsMarkersRef.current.forEach(marker => marker.setMap?.(null))
+    newsMarkersRef.current = []
+
+    if (!showWildfires) return
+
+    points.forEach(point => {
+      const lat = Number(point?.lat)
+      const lng = Number(point?.lon ?? point?.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+      let marker
+      const position = { lat, lng }
+      if (g.marker?.AdvancedMarkerElement) {
+        const el = document.createElement('div')
+        el.style.fontSize = '18px'
+        el.textContent = '🔥'
+        marker = new g.marker.AdvancedMarkerElement({
+          map: mapRef.current,
+          position,
+          title: point?.title || 'Wildfire update',
+          content: el,
+        })
+      } else {
+        marker = new g.Marker({
+          map: mapRef.current,
+          position,
+          title: point?.title || 'Wildfire update',
+          label: { text: '🔥', fontSize: '18px' },
+        })
+      }
+      newsMarkersRef.current.push(marker)
+    })
+  }
+
   function eonetBBoxFromMap(map) {
     const b = map?.getBounds?.()
     if (!b) return null
@@ -412,6 +509,32 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
   return (
     <div className="map-inner" style={{ position: 'relative' }}>
       <div ref={mapElRef} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
+      {mapError ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            textAlign: 'center',
+            background: 'rgba(0, 0, 0, 0.55)',
+            color: '#fff',
+            borderRadius: 12,
+            gap: 12,
+            zIndex: 3,
+          }}
+        >
+          <div style={{ fontSize: 24 }}>⚠️</div>
+          <div style={{ fontWeight: 600 }}>Google Maps is unavailable</div>
+          <div style={{ maxWidth: 320, opacity: 0.9, lineHeight: 1.4 }}>
+            {mapError} You can add a `VITE_GOOGLE_MAPS_API_KEY` in your `.env` file or
+            update the key restrictions in the Google Cloud console.
+          </div>
+        </div>
+      ) : null}
       {/* Quick control to ingest a TEMPO PNG URL and overlay it using current map bbox */}
       <button
         onClick={async () => {

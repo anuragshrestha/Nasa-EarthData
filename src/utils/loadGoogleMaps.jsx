@@ -5,7 +5,10 @@ export function loadGoogleMaps() {
   if (window.google?.maps?.places && window.google?.maps?.visualization) return Promise.resolve();
   if (mapsLoader) return mapsLoader;
 
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || window.__GOOGLE_MAPS_API_KEY__;
+  if (!apiKey) {
+    return Promise.reject(new Error('Google Maps API key is missing. Set VITE_GOOGLE_MAPS_API_KEY in your env.'));
+  }
 
   mapsLoader = new Promise((resolve, reject) => {
     const id = 'google-maps-places';

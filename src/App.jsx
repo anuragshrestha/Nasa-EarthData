@@ -38,7 +38,13 @@ function App() {
           </div>
        <div className="home-desktop"><Home center={location} /></div>
           <div className="stack">
-            <WildfireUpdates />
+            <WildfireUpdates onFocusLocation={(pt) => {
+              const lat = Number(pt?.lat)
+              const lng = Number(pt?.lng)
+              if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                setLocation({ lat, lng })
+              }
+            }} />
             <DataSources />
           </div>
         </div>
