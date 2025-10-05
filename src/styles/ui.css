@@ -514,13 +514,11 @@ section {
 
 /* AQI label marker style */
 .aqi-badge {
-  background: white;
-  color: black;
-  padding: 4px 6px;
+  background: #fff;
+  color: #000;
   border-radius: 6px;
+  padding: 2px 6px;
   font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 0 4px rgba(0,0,0,0.25);
-  transform: translateY(-24px);
-  border: 1px solid rgba(0,0,0,0.15);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
 }
