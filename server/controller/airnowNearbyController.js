@@ -9,22 +9,76 @@ function categoryFromAQI(aqi) {
 }
 
 
-async function fetchPoint(lat, lon, radiusMiles, apiKey) {
+// async function fetchPoint(lat, lon, radiusMiles, apiKey) {
     
+//   console.log('-HITTING AIRNOW NEARBY API---');
+  
+//   const url = `https://www.airnowapi.org/aq/observation/latLong/current/` +
+//     `?format=application/json&latitude=${encodeURIComponent(lat)}` +
+//     `&longitude=${encodeURIComponent(lon)}&distance=${encodeURIComponent(radiusMiles)}` +
+//     `&API_KEY=${apiKey}`;
+    
+//   const r = await fetch(url, { headers: { Accept: "application/json" } });
+//   if (!r.ok) throw new Error(await r.text());
+//   const observations = await r.json();
+//   let dominant = null;
+//   for (const o of observations || []) {
+//     if (o?.AQI == null) continue;
+//     if (!dominant || Number(o.AQI) > Number(dominant.AQI)) dominant = o;
+//   }
+//   if (!dominant) return null;
+//   const cat = categoryFromAQI(dominant.AQI);
+//   console.log("DOMINANT API");
+  
+//   return {
+//     reportingArea: dominant.ReportingArea,
+//     state: dominant.StateCode,
+//     lat: dominant.Latitude,
+//     lon: dominant.Longitude,
+//     aqi: dominant.AQI,
+//     category: cat.label,
+//     color: cat.color,
+//     parameter: dominant.ParameterName,
+//   };
+// }
+
+async function fetchPoint(lat, lon, radiusMiles, apiKey) {
   const url = `https://www.airnowapi.org/aq/observation/latLong/current/` +
     `?format=application/json&latitude=${encodeURIComponent(lat)}` +
     `&longitude=${encodeURIComponent(lon)}&distance=${encodeURIComponent(radiusMiles)}` +
     `&API_KEY=${apiKey}`;
-    
+
+  console.log("[AirNow] GET", url.replace(/API_KEY=.*$/, "API_KEY=****"));
+
   const r = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!r.ok) throw new Error(await r.text());
-  const observations = await r.json();
+  const body = await r.text(); // read once
+  if (!r.ok) {
+    console.error("[AirNow] HTTP", r.status, body);
+    throw new Error(`AirNow ${r.status}`);
+  }
+
+  let observations;
+  try { observations = JSON.parse(body); } 
+  catch (e) { 
+    console.error("[AirNow] JSON parse error", body); 
+    throw e; 
+  }
+
+  if (!Array.isArray(observations) || observations.length === 0) {
+    console.warn("[AirNow] empty observations for", lat, lon);
+    return null;
+  }
+
   let dominant = null;
-  for (const o of observations || []) {
+  for (const o of observations) {
     if (o?.AQI == null) continue;
     if (!dominant || Number(o.AQI) > Number(dominant.AQI)) dominant = o;
   }
-  if (!dominant) return null;
+  if (!dominant) {
+    console.warn("[AirNow] no AQI values in observations", observations);
+    return null;
+  }
+
   const cat = categoryFromAQI(dominant.AQI);
   return {
     reportingArea: dominant.ReportingArea,
