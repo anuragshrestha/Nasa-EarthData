@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+/* global google */
+import React, { useEffect, useRef } from 'react';
 import { loadGoogleMaps } from '../utils/loadGoogleMaps';
 
 export default function AutocompleteAddress({
   placeholder = 'Enter Street address, City name or ZIP code',
   className,
+  value,          
+  onValueChange,       
   onPlaceSelected,
-  defaultValue = '',
-  countryRestriction, 
+  countryRestriction,
 }) {
   const inputRef = useRef(null);
-  const [value, setValue] = useState(defaultValue);
 
   useEffect(() => {
     let autocomplete = null;
@@ -29,7 +30,7 @@ export default function AutocompleteAddress({
         listener = autocomplete.addListener('place_changed', () => {
           const place = autocomplete.getPlace();
           const label = place.formatted_address || place.name || '';
-          setValue(label);
+          onValueChange && onValueChange(label);   // keep input in sync
 
           onPlaceSelected &&
             onPlaceSelected({
@@ -47,7 +48,7 @@ export default function AutocompleteAddress({
       cancelled = true;
       if (listener) google.maps.event.removeListener(listener);
     };
-  }, [onPlaceSelected, countryRestriction]);
+  }, [onPlaceSelected, onValueChange, countryRestriction]);
 
   return (
     <input
@@ -55,8 +56,8 @@ export default function AutocompleteAddress({
       className={className}
       placeholder={placeholder}
       aria-label="Search by address, city, or ZIP"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
+      value={value ?? ''}                          
+      onChange={(e) => onValueChange && onValueChange(e.target.value)}
       type="search"
       autoComplete="off"
     />

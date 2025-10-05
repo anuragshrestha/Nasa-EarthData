@@ -5,42 +5,74 @@ export default function AirQualityAlerts() {
   const [email, setEmail] = useState("");
   const [threshold, setThreshold] = useState("");
   const [location, setLocation] = useState(null);
+  const [address, setAddress] = useState(""); 
+  const [toast, setToast] = useState(null);
 
-const API_URL = import.meta.env.MODE === 'development' ? 'http://localhost:4000' :  import.meta.env.VITE_API_URL;
- 
 
-//calls api to store the alert data
-const handleAlert = async () => {
-  if (!email || !threshold || !location) {
-    alert('Please fill email, location and AQI threshold');
-    return;
-  }
-  try {
-    const res = await fetch(`${API_URL}/alerts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        threshold: Number(threshold),
-        location: {
-          label: location.label,
-          lat: location.lat,
-          lng: location.lng,
-          placeId: location.placeId
-        }
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed');
-    console.log('Saved alert:', data);
-  } catch (e) {
-    console.error(e);
-    alert('Failed to save alert');
-  }
-};
+  const API_URL =
+    import.meta.env.MODE === "development"
+      ? "http://localhost:4000"
+      : import.meta.env.VITE_API_URL;
+
+  //calls api to store the alert data
+  const handleAlert = async () => {
+    if (!email || !threshold || !location) {
+      alert("Please fill email, location and AQI threshold");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          threshold: Number(threshold),
+          location: {
+            label: location.label,
+            lat: location.lat,
+            lng: location.lng,
+            placeId: location.placeId,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setEmail("");
+      setThreshold("");
+      setLocation(null);
+        setAddress("");   
+      console.log("Saved alert:", data);
+      setToast({ type: "success", text: "Alert saved successfully!" });
+      setTimeout(() => setToast(null), 5000);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save alert");
+    }
+  };
 
   return (
     <section id="alerts" className="section">
+      {toast && (
+        <div
+          style={{
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            padding: "12px 18px",
+            borderRadius: "8px",
+            background:
+              toast.type === "success"
+                ? "rgba(34,197,94,.9)"
+                : "rgba(239,68,68,.9)",
+            color: "white",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            transition: "opacity 0.3s",
+            zIndex: 1000,
+          }}
+        >
+          {toast.text}
+        </div>
+      )}
       <div className="panel alerts">
         <h3>
           <span className="emoji-icon" role="img" aria-label="Alert">
@@ -71,6 +103,8 @@ const handleAlert = async () => {
           </label>
           <AutocompleteAddress
             className="input"
+            value={address}
+            onValueChange={setAddress}
             onPlaceSelected={setLocation}
             countryRestriction="us"
           />
