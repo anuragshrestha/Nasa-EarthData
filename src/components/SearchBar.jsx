@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import AutocompleteAddress from "./AutoCompleteAddress";
+import WeatherSummary from "./WeatherSummary";
+import AirQualitySummary from "./AirQualitySummary";
 
 export default function SearchBar({ onSearchLocation }) {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [address, setAddress] = useState("");
+  const [weather, setWeather] = useState(null);
+  const [aqi, setAqi] = useState(null);
 
   const API_URL =
     import.meta.env.MODE === "development"
@@ -23,7 +27,33 @@ export default function SearchBar({ onSearchLocation }) {
     const { lat, lng } = location;
 
     onSearchLocation?.({ lat, lng });
-    setTimeout(() => setLoading(false), 1000);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/weather/current?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&format=summary`
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setWeather(data);
+    } catch (e) {
+      console.error("Weather fetch failed", e);
+      setToast({ type: "error", text: "Failed to fetch weather" });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setLoading(false);
+    }
+
+    // Fetch API Ninjas AQI (optional; requires API_NINJAS_KEY on server)
+    try {
+      const res = await fetch(
+        `${API_URL}/api/airquality/ninjas?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setAqi(data?.normalized || null);
+    } catch (e) {
+      console.warn("AQI (API Ninjas) fetch failed", e);
+      setAqi(null);
+    }
 
     // try {
     //   setLoading(true);
@@ -89,6 +119,8 @@ export default function SearchBar({ onSearchLocation }) {
           {loading ? "Searching..." : "Search"}
         </button>
       </div>
+      <WeatherSummary data={weather} />
+      <AirQualitySummary data={aqi} />
     </header>
   );
 }

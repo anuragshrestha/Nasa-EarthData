@@ -1,5 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { loadGoogleMaps } from '../utils/loadGoogleMaps'
+import { fetchWildfiresGeoJSON } from '../lib/eonet'
+
+const WILDFIRE_FILL_OPACITY = 0.25
+const WILDFIRE_STROKE_OPACITY = 0.9
+
+function createControl(html, onClick) {
+  const div = document.createElement('div')
+  div.style.background = '#fff'
+  div.style.border = '1px solid #ccc'
+  div.style.borderRadius = '6px'
+  div.style.padding = '6px 10px'
+  div.style.margin = '8px'
+  div.style.font = '500 13px system-ui, sans-serif'
+  div.style.cursor = 'pointer'
+  div.innerHTML = html
+  div.addEventListener('click', onClick)
+  return div
+}
 
 
 /**
@@ -11,9 +29,16 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
   const mapElRef = useRef(null)
   const mapRef = useRef(null)
   const markerRef = useRef(null)
+  const labelRef = useRef(null)
   const heatmapRef = useRef(null)
+  const tempoOverlayRef = useRef(null)
+  const wildfireCtrlRef = useRef(null)
   const [ready, setReady] = useState(false)
   const abortRef = useRef(null)
+  const wildfireFetchAbortRef = useRef(null)
+  const [showWildfires, setShowWildfires] = useState(true)
+  const [fireMarkers, setFireMarkers] = useState([])
+  const [firePolys, setFirePolys] = useState([])
 
   
   useEffect(() => {
@@ -33,6 +58,63 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
     .catch(err => console.error('Maps JS failed to load:', err));
 
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!ready || !mapRef.current || !window.google?.maps) return
+
+    const map = mapRef.current
+    if (!wildfireCtrlRef.current) {
+      const ctrl = createControl('🔥 Wildfires: <b>ON</b>', () => {
+        setShowWildfires(prev => !prev)
+      })
+      wildfireCtrlRef.current = ctrl
+      map.controls[window.google.maps.ControlPosition.TOP_LEFT].push(ctrl)
+    }
+
+    const idleListener = map.addListener('idle', () => {
+      if (showWildfires) {
+        refreshWildfires(map, setFireMarkers, setFirePolys, wildfireFetchAbortRef)
+      }
+    })
+
+    return () => {
+      if (idleListener?.remove) idleListener.remove()
+    }
+  }, [ready, showWildfires])
+
+  useEffect(() => {
+    if (wildfireCtrlRef.current) {
+      wildfireCtrlRef.current.innerHTML = `🔥 Wildfires: <b>${showWildfires ? 'ON' : 'OFF'}</b>`
+    }
+
+    if (!showWildfires) {
+      clearWildfires({ setFireMarkers, setFirePolys })
+      if (wildfireFetchAbortRef.current) wildfireFetchAbortRef.current.abort()
+      return
+    }
+
+    if (mapRef.current && ready) {
+      refreshWildfires(mapRef.current, setFireMarkers, setFirePolys, wildfireFetchAbortRef)
+    }
+  }, [showWildfires, ready])
+
+  useEffect(() => {
+    return () => {
+      if (wildfireFetchAbortRef.current) wildfireFetchAbortRef.current.abort()
+      clearWildfires({ setFireMarkers, setFirePolys })
+      if (mapRef.current && wildfireCtrlRef.current && window.google?.maps?.ControlPosition != null) {
+        const controlsArray = mapRef.current.controls[window.google.maps.ControlPosition.TOP_LEFT]
+        const current = wildfireCtrlRef.current
+        for (let i = controlsArray.getLength() - 1; i >= 0; i -= 1) {
+          if (controlsArray.getAt(i) === current) {
+            controlsArray.removeAt(i)
+            break
+          }
+        }
+      }
+      wildfireCtrlRef.current = null
+    }
   }, [])
 
   // Update marker + pan when center changes
@@ -68,6 +150,7 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
 
     // refresh AQI heat layer near the selected point
     refreshAQIHeat(center)
+    refreshAqiBadge(center)
   }, [center, ready, zoomOnSelect])
 
   // Convert PM2.5 ug/m3 to US EPA AQI (approximate 24h formula)
@@ -104,6 +187,21 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
     return import.meta.env.MODE === 'development'
       ? `http://localhost:4000`
       : import.meta.env.VITE_API_URL
+  }
+
+  async function refreshAqiBadge(pt){
+    try{
+      if(!pt || !markerRef.current) return
+      const url = `${apiBase()}/api/airquality/ninjas?lat=${encodeURIComponent(pt.lat)}&lon=${encodeURIComponent(pt.lng)}`
+      const res = await fetch(url)
+      if(!res.ok) return
+      const data = await res.json()
+      const aqi = data?.normalized?.overallAQI
+      if(aqi == null) return
+      markerRef.current.setLabel({ text: String(aqi), color: '#ffffff', fontSize: '12px' })
+    }catch(e){
+      // non-fatal
+    }
   }
 
   async function refreshAQIHeat(pt) {
@@ -174,9 +272,183 @@ export default function WorldMap({ center, zoomOnSelect = 11 }) {
     }
   }
 
+  function clearWildfires({ setFireMarkers, setFirePolys }) {
+    setFireMarkers(prev => {
+      prev.forEach(m => m.setMap?.(null))
+      return []
+    })
+    setFirePolys(prev => {
+      prev.forEach(p => p.setMap?.(null))
+      return []
+    })
+  }
+
+  function eonetBBoxFromMap(map) {
+    const b = map?.getBounds?.()
+    if (!b) return null
+    const ne = b.getNorthEast()
+    const sw = b.getSouthWest()
+    if (!ne || !sw) return null
+    const minLon = sw.lng()
+    const maxLat = ne.lat()
+    const maxLon = ne.lng()
+    const minLat = sw.lat()
+    return `${minLon},${maxLat},${maxLon},${minLat}`
+  }
+
+  async function refreshWildfires(map, setFireMarkers, setFirePolys, abortRefWildfire) {
+    const g = window.google?.maps
+    if (!g) return
+    const bbox = eonetBBoxFromMap(map)
+    if (!bbox) return
+
+    if (abortRefWildfire.current) abortRefWildfire.current.abort()
+    const controller = new AbortController()
+    abortRefWildfire.current = controller
+
+    let fc
+    try {
+      fc = await fetchWildfiresGeoJSON(
+        { bbox, days: 14, limit: 300, status: 'open' },
+        { signal: controller.signal }
+      )
+    } catch (error) {
+      if (controller.signal.aborted) return
+      console.error('EONET fetch failed:', error)
+      return
+    }
+    if (controller.signal.aborted) return
+
+    clearWildfires({ setFireMarkers, setFirePolys })
+
+    const markers = []
+    const polys = []
+
+    const features = Array.isArray(fc?.features) ? fc.features : []
+    features.forEach(feat => {
+      const props = feat?.properties || {}
+      const geom = feat?.geometry || {}
+
+      if (geom.type === 'Point' && Array.isArray(geom.coordinates)) {
+        const [lon, lat] = geom.coordinates
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          const el = document.createElement('div')
+          el.style.fontSize = '18px'
+          el.textContent = '🔥'
+
+          let marker
+          if (g.marker?.AdvancedMarkerElement) {
+            marker = new g.marker.AdvancedMarkerElement({
+              map,
+              position: { lat, lng: lon },
+              title: props.title || 'Wildfire',
+              content: el,
+            })
+          } else {
+            marker = new g.Marker({
+              map,
+              position: { lat, lng: lon },
+              title: props.title || 'Wildfire',
+              label: { text: '🔥', fontSize: '18px' },
+            })
+          }
+
+          const content = document.createElement('div')
+          content.style.maxWidth = '260px'
+          content.style.fontSize = '12px'
+          const sourcesHtml = Array.isArray(props.sources)
+            ? props.sources
+                .map(s => {
+                  const href = s?.url || s?.id || '#'
+                  const label = s?.id || s?.url || 'Source'
+                  return `<a href="${href}" target="_blank" rel="noopener">${label}</a>`
+                })
+                .join(' | ')
+            : ''
+          content.innerHTML = `
+            <div style="font-weight:600;margin-bottom:4px;">${props.title || 'Wildfire'}</div>
+            <div style="margin-bottom:6px;">${props.date ? new Date(props.date).toLocaleString() : ''}</div>
+            <div style="margin-bottom:6px;opacity:.8;">Status: ${props.closed ? 'Closed' : 'Open'}</div>
+            ${sourcesHtml ? `<div style="margin-top:6px;">Sources: ${sourcesHtml}</div>` : ''}
+            ${props.link ? `<div style="margin-top:6px;"><a href="${props.link}" target="_blank" rel="noopener">View on EONET</a></div>` : ''}
+          `
+
+          const info = new g.InfoWindow({ content })
+          const listenerTarget = marker.addListener ? marker : null
+          listenerTarget?.addListener('click', () => info.open({ anchor: marker, map }))
+          markers.push(marker)
+        }
+      }
+
+      if (geom.type === 'Polygon' && Array.isArray(geom.coordinates)) {
+        const ring = geom.coordinates[0] || []
+        const path = ring
+          .map(coord => {
+            const [lon, lat] = coord || []
+            return Number.isFinite(lat) && Number.isFinite(lon)
+              ? { lat, lng: lon }
+              : null
+          })
+          .filter(Boolean)
+        if (path.length) {
+          const poly = new g.Polygon({
+            map,
+            paths: path,
+            strokeWeight: 1,
+            strokeOpacity: WILDFIRE_STROKE_OPACITY,
+            fillOpacity: WILDFIRE_FILL_OPACITY,
+            strokeColor: '#d35400',
+            fillColor: '#e67e22',
+          })
+          polys.push(poly)
+        }
+      }
+    })
+
+    setFireMarkers(markers)
+    setFirePolys(polys)
+  }
+
   return (
-    <div className="map-inner">
+    <div className="map-inner" style={{ position: 'relative' }}>
       <div ref={mapElRef} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
+      {/* Quick control to ingest a TEMPO PNG URL and overlay it using current map bbox */}
+      <button
+        onClick={async () => {
+          if (!mapRef.current) return
+          const imageUrl = window.prompt('Enter TEMPO PNG URL (from Harmony):')
+          if (!imageUrl) return
+          const b = mapRef.current.getBounds()
+          if (!b) return
+          const sw = b.getSouthWest(); const ne = b.getNorthEast()
+          const bbox = `${sw.lng()},${sw.lat()},${ne.lng()},${ne.lat()}`
+          try {
+            const base = apiBase()
+            const res = await fetch(`${base}/api/nasa/tempo/no2?imageUrl=${encodeURIComponent(imageUrl)}&bbox=${encodeURIComponent(bbox)}`)
+            if (!res.ok) throw new Error(await res.text())
+            const data = await res.json()
+            const { url, bounds } = data || {}
+            if (!url || !bounds) return
+            const overlayBounds = new google.maps.LatLngBounds(
+              new google.maps.LatLng(bounds.south, bounds.west),
+              new google.maps.LatLng(bounds.north, bounds.east)
+            )
+            if (!tempoOverlayRef.current) {
+              tempoOverlayRef.current = new google.maps.GroundOverlay(`${apiBase()}${url}`, overlayBounds, { opacity: 0.5 })
+            } else {
+              tempoOverlayRef.current.setMap(null)
+              tempoOverlayRef.current = new google.maps.GroundOverlay(`${apiBase()}${url}`, overlayBounds, { opacity: 0.5 })
+            }
+            tempoOverlayRef.current.setMap(mapRef.current)
+          } catch (e) {
+            console.warn('TEMPO overlay failed', e)
+          }
+        }}
+        style={{ position: 'absolute', right: 12, top: 12, zIndex: 2, padding: '6px 10px', background: 'rgba(0,0,0,0.6)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, cursor: 'pointer' }}
+        title="Overlay a TEMPO PNG using current map bounds"
+      >
+        Add TEMPO Overlay
+      </button>
     </div>
   )
 }

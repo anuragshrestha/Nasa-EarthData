@@ -168,9 +168,10 @@ html {
 /* Sections / Panels */
 section {
   scroll-margin-top: 80px;
-    margin-top: 20px;
 }
-
+.section {
+  margin-top: 20px;
+}
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
