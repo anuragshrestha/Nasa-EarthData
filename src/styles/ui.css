@@ -409,6 +409,8 @@ section {
   border: 1px solid var(--border);
 }
 .dot {
+  position: relative;
+   left: 5px; 
   width: 8px;
   height: 8px;
   border-radius: 999px;
