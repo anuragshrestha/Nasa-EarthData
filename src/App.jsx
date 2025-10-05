@@ -18,14 +18,13 @@ function App() {
       <div className="container">
         <TitleBar />
         <SearchBar />
+        <div className="home-mobile"><Home /></div>
         <div className="dashboard-grid">
           <div className="stack">
             <AirQualityAlerts />
             <CityRankings />
           </div>
-          <div>
-            <Home />
-          </div>
+       <div className="home-desktop"><Home /></div>
           <div className="stack">
             <WildfireUpdates />
             <DataSources />
