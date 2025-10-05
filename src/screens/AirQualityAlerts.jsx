@@ -6,10 +6,36 @@ export default function AirQualityAlerts() {
   const [threshold, setThreshold] = useState("");
   const [location, setLocation] = useState(null);
 
-  const handleAlert = () => {
-    //needs to call backend
-    console.log("alert pressed");
-  };
+
+  //calls api to store the alert data
+const handleAlert = async () => {
+  if (!email || !threshold || !location) {
+    alert('Please fill email, location and AQI threshold');
+    return;
+  }
+  try {
+    const res = await fetch('http://localhost:5174/alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        threshold: Number(threshold),
+        location: {
+          label: location.label,
+          lat: location.lat,
+          lng: location.lng,
+          placeId: location.placeId
+        }
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    console.log('Saved alert:', data);
+  } catch (e) {
+    console.error(e);
+    alert('Failed to save alert');
+  }
+};
 
   return (
     <section id="alerts" className="section">
@@ -70,7 +96,7 @@ export default function AirQualityAlerts() {
           />
         </div>
 
-        <button className="btn">
+        <button className="btn" onClick={handleAlert}>
           <svg
             className="icon"
             width="18"
