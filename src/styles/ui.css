@@ -442,6 +442,11 @@ section {
   }
 }
 
+.fire-list {
+ color: #eceaea;
+}
+
+
 @media (max-width: 720px) {
   .titlebar,
   .hero,

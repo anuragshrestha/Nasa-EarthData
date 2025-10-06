@@ -1,15 +1,15 @@
 # NASA Inhale — Real‑Time US AQI and Wildfires
 
-Live: https://nasainhale.netlify.app/
+Live Website: https://nasainhale.netlify.app/
 
-## This Project if for the 2025 Nasa Space Apps Challenge
+## This Project is for the 2025 Nasa Space Apps Challenge Hackathon
 
 ## Project Challenge
 - From EarthData to Action: Cloud Computing with Earth Observation Data for Predicting Cleaner, Safer Skies
 - Challenge link: https://www.spaceappschallenge.org/2025/challenges/from-earthdata-to-action-cloud-computing-with-earth-observation-data-for-predicting-cleaner-safer-skies/?tab=resources
 
 
-## What It Solves
+## Project Details
 NASA Inhale helps people quickly understand current air quality and wildfire activity across the United States:
 - Provides current Air Quality Index (AQI) based on a street address, city, or ZIP code, color‑coded by EPA categories.
 - Visualizes nearby AQI hotspots on a satellite basemap using Google Maps.
