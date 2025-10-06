@@ -3,18 +3,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 const EONET_ENDPOINT = 'https://eonet.gsfc.nasa.gov/api/v3/events/geojson?category=wildfires&status=open&days=14&limit=20'
 
 const FIRMS_OVERRIDES = {
-  'Lake Creek Wildfire, Blaine, Idaho': 'https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;@-115.0,43.5,7.5z',
-  'Hayes Wildfire, Blaine, Montana': 'https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;@-111.9,45.3,8.5z',
-  'Heat Wave Wildfire, Callahan, Texas': 'https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;@-98.7,32.4,8.3z',
-}
-
-function firmsLink(coords) {
-  if (!coords) return null
-  const lat = Number(coords.lat)
-  const lon = Number(coords.lon ?? coords.lng)
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-  const zoom = 6
-  return `https://firms.modaps.eosdis.nasa.gov/map/#t:firms;d:24hrs;@${lon.toFixed(2)},${lat.toFixed(2)},${zoom}z`
+  'Lake Creek Wildfire, Blaine, Idaho': {
+    sourceName: 'KIVI-TV (Idaho News 6)',
+    sourceUrl: 'https://www.kivitv.com/news/magic-valley/lake-creek-fire-continues-to-burn-near-popular-recreation-area-6-miles-north-of-ketchum',
+  },
+  'Hayes Wildfire, Blaine, Montana': {
+    sourceName: 'WildFire Explorer',
+    sourceUrl: 'https://fires.cornea.is/fire/montana_hayes_2025-09-28-195632/',
+  },
+  'Heat Wave Wildfire, Callahan, Texas': {
+    sourceName: 'KTXS News (Abilene)',
+    sourceUrl: 'https://ktxs.com/news/local/heat-wave-and-rocky-top-fires-burn-in-callahan-county',
+  },
 }
 
 function magnitudeBadge(magnitudeValue) {
@@ -48,8 +48,8 @@ function normalizeFeature(feature) {
   }
 
   const title = (props.title || 'Wildfire Event').trim()
-  const manualFirmsLink = FIRMS_OVERRIDES[title]
-  if (!manualFirmsLink) {
+  const override = FIRMS_OVERRIDES[title]
+  if (!override) {
     return null
   }
 
@@ -59,15 +59,16 @@ function normalizeFeature(feature) {
     summary: props.description || '',
     location: props.title || null,
     publishedAt: props.date || null,
-    sourceName: sourceName || 'EONET',
-    link: primarySource?.url || props.link || eonetLink,
+    sourceName: override.sourceName || sourceName || 'EONET',
+    sourceUrl: override.sourceUrl || primarySource?.url || props.link || eonetLink,
+    link: override.sourceUrl || primarySource?.url || props.link || eonetLink,
     eonetLink,
     sources,
     badge: magnitudeBadge(Number(props.magnitudeValue)),
     coordinates: coordinates && Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lon)
       ? coordinates
       : null,
-    firmsLink: manualFirmsLink,
+    firmsLink: null,
   }
 }
 
@@ -193,20 +194,24 @@ export default function WildfireUpdates({ onFocusLocation }) {
         ) : null}
         <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
           {article.publishedAt ? `Updated ${formatDate(article.publishedAt)}` : 'Updated recently'}
-          {article.sourceName ? ` • Primary source: ${article.sourceName}` : ''}
+          {article.sourceName ? (
+            <>
+              {' • Primary source: '}
+              {article.sourceUrl ? (
+                <a
+                  href={article.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#7ec8ff' }}
+                >
+                  {article.sourceName}
+                </a>
+              ) : (
+                article.sourceName
+              )}
+            </>
+          ) : null}
         </div>
-        {article.firmsLink ? (
-          <div style={{ marginTop: 10 }}>
-            <a
-              href={article.firmsLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="link-button"
-            >
-              View in FIRMS ↗
-            </a>
-          </div>
-        ) : null}
       </div>
     ))
   }, [articles, status, error, loadArticles, onFocusLocation])
